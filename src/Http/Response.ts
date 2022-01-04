@@ -2,6 +2,7 @@ import {ObjectContainer} from "@envuso/object-container";
 import is from "@sindresorhus/is";
 import {Buffer} from "buffer";
 import {OutgoingHttpHeader, OutgoingHttpHeaders, ServerResponse} from "http";
+import {nanoid} from "nanoid";
 import type {Request} from "./Request";
 import {StatusCodes} from "./StatusCodes";
 
@@ -14,6 +15,8 @@ const CONTENT_TYPE = {
 export type HeadersValueType = OutgoingHttpHeader;
 
 export class Response {
+
+	private _id: string = null;
 
 	public raw: ServerResponse = null;
 	public request: Request    = null;
@@ -28,11 +31,20 @@ export class Response {
 	private ended: boolean = false;
 
 	constructor(code: StatusCodes = StatusCodes.OK) {
+		this._id        = nanoid();
 		this.headers    = new ObjectContainer({}, {
 			convertAllKeysToLowerCase   : true,
 			convertAllValuesToLowerCase : false,
 		});
 		this.statusCode = code;
+	}
+
+	public id(): string {
+		return this._id;
+	}
+
+	public is(response: Response): boolean {
+		return this._id === response._id;
 	}
 
 	public isSent(): boolean {
@@ -55,6 +67,12 @@ export class Response {
 		return this.raw !== null && this.request !== null;
 	}
 
+	public withData(data: any) {
+		this.data = data;
+
+		return this;
+	}
+
 	//	private setHeaders() {
 	//		for (let key in this.headers.all()) {
 	//			this.raw.setHeader(key, this.headers.get(key));
@@ -70,6 +88,8 @@ export class Response {
 		if (!this.canSend()) {
 			throw new Error('Request has ended or already been sent.');
 		}
+
+		this.headers.put('x-request-id', this.request.requestUuid);
 
 		if (!this.headers.has('content-type')) {
 			if (Buffer.isBuffer(this.data) || typeof this.data.pipe === 'function') {
@@ -109,8 +129,20 @@ export class Response {
 		this.raw.end(() => {
 			this.ended = true;
 			this.sent  = true;
-			console.log('sent?');
+			//			console.log('sent?');
 		});
 
+	}
+
+	public setFrom(custom: Response, response: Response, request: Request): void {
+		if (custom.is(response)) {
+			return;
+		}
+
+		this.headers    = custom.headers;
+		this.data       = custom.data;
+		this.statusCode = custom.statusCode;
+		this.sent       = custom.sent;
+		this.ended      = custom.ended;
 	}
 }

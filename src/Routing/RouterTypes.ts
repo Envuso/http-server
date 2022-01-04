@@ -10,7 +10,8 @@ export enum HttpMethod {
 	PUT    = 'PUT',
 }
 
+export type ArrayableHttpMethod = HttpMethod | HttpMethod[];
 
 export type HandlerMethodResponse = Response | object;
 
-export type RequestHandlerMethod = (request: Request, response: Response) => Promise<HandlerMethodResponse>;
+export type RequestHandlerMethod = (request: Request, response: Response) => (Promise<HandlerMethodResponse> | HandlerMethodResponse);

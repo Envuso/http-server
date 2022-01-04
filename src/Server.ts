@@ -1,12 +1,18 @@
+import {AsyncLocalStorage} from "async_hooks";
 import {HTTPMethod} from "find-my-way";
 import http, {Server, IncomingMessage, ServerResponse} from 'http';
-import {HttpRouter} from "./Routing/HttpRouter";
+import {Context} from "./Http/Context";
+import {Request} from "./Http/Request";
+import {Response} from "./Http/Response";
+import {Router} from "./Routing/Router";
 
 let instance: HttpServer = null;
 
 export class HttpServer {
+
 	private server: Server;
-	private router: HttpRouter = new HttpRouter();
+
+	private requestId: number = 0;
 
 	constructor() {
 		if (instance) {
@@ -22,16 +28,17 @@ export class HttpServer {
 		return instance;
 	}
 
-	getRouteRegistrar() {
-		return this.router.getRouteRegistrar();
-	}
-
-	getRouter() {
-		return this.router;
-	}
-
 	handle(req: IncomingMessage, res: ServerResponse) {
-		const route = this.router.get().find(<HTTPMethod>req.method, req.url);
+		this.requestId++;
+
+		const request = new Request(req);
+		request.setRequestId(this.requestId);
+
+		const response   = new Response();
+		response.request = request;
+		response.raw     = res;
+
+		const route = Router.getHandlerForRequest(request);
 
 		if (!route) {
 			res.writeHead(404, {'content-type' : 'application/json'});
@@ -40,15 +47,13 @@ export class HttpServer {
 			return;
 		}
 
-
 		try {
-			route.handler(req, res, route.params, {});
+			Context.create(request, response, () => {
+				route.handleRequest(request, response);
+			});
 		} catch (error) {
 			res.end('HTTP/1.1 500 Internal Server Error\r\n\r\n');
 		}
-
-		console.log(req.url);
-
 	}
 
 	listen(port: number) {
@@ -62,7 +67,7 @@ export class HttpServer {
 			console.log(`Running on: http://127.0.0.1:${port}`, address);
 		});
 
-		this.getRouter().initialiseRoutes();
+		Router.initialiseRoutes();
 	}
 
 }
